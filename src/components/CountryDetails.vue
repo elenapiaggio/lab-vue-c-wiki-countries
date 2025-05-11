@@ -1,11 +1,28 @@
 <script setup>
 import { useRoute } from 'vue-router';
-import { ref, computed, watch } from 'vue';
-import countries from '@/countries.json';
+import { ref, computed, watch, onMounted } from 'vue';
+import { fetchCountryByCode } from '@/services/services.js';
+import { fetchAllCountries } from '@/services/services.js';
 
 const route = useRoute();
 const alpha3Code = computed(() => route.params.alpha3Code);
 const alpha2Code = ref('');
+
+const countries = ref([]);
+const countryData = ref(null)
+
+const loading = ref(true)
+const error = ref(null)
+
+onMounted(async () => {
+  try {
+    countries.value = await fetchAllCountries()
+  } catch (e) {
+    error.value = e
+  } finally {
+    loading.value = false;
+  }
+})
 
 const country = computed(() => {
   const code3 = String(alpha3Code.value).toUpperCase();
@@ -16,47 +33,46 @@ const country = computed(() => {
 
 watch(
   () => alpha3Code.value,
-  (newAlpha3) => {
-    const code3 = String(newAlpha3).toUpperCase();
-
-    const country = countries.find(
-      c => c.alpha3Code.toUpperCase() === code3
-    );
-    console.log('nuevo alpha3:', newAlpha3);
-    console.log('country encontrado:', country);
-    alpha2Code.value = country ? country.alpha2Code : '';
+  async newCode => {
+    loading.value = true
+    try {
+      const data = await fetchCountryByCode(newCode)
+      alpha2Code.value = data.alpha2Code
+      countryData.value = data
+    } catch (err) {
+      error.value = err
+    } finally {
+      loading.value = false
+    }
   },
   { immediate: true }
-
 )
-
 </script>
 
 <template>
-
-
-
-  <div class="col-7">
+  <div v-if="loading">Cargando…</div>
+  <div v-else-if="error">Error: {{ error.message }}</div>
+  <div v-else class="col-7" v-if="countryData">
     <img class="me-3" :src="`https://flagpedia.net/data/flags/icon/72x54/${alpha2Code.toLowerCase()}.png`" />
-    <h1>{{ country.name.common }}</h1>
+    <h1>{{ countryData.name.common }}</h1>
     <table class="table">
       <thead></thead>
       <tbody>
         <tr>
           <td style="width: 30%">Capital</td>
-          <td>{{ country.capital[0] }}</td>
+          <td>{{ countryData.capital[0] }}</td>
         </tr>
         <tr>
           <td>Area</td>
           <td>
-            {{ country.area }} km <sup>2</sup>
+            {{ countryData.area }} km <sup>2</sup>
           </td>
         </tr>
         <tr>
           <td>Borders</td>
           <td>
             <ul>
-              <li v-for="border in country.borders" :key="border">
+              <li v-for="border in countryData.borders" :key="border">
                 <router-link :to="`/${border}`">{{ border }}</router-link>
               </li>
             </ul>
@@ -65,8 +81,6 @@ watch(
       </tbody>
     </table>
   </div>
-
-
 </template>
 
 <style scoped></style>
